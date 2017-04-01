@@ -2,19 +2,31 @@ import tensorflow as tf
 from glob import glob
 from numpy import *
 import numpy as np
-from scipy.misc import imread, imresize
+from scipy.misc import imread, imresize,imshow
 from imagenet_classes import class_names
 
 vgg_weights = load('vgg16.npy', encoding='latin1').item()
 def load_images(pattern):
     fn = sorted(glob(pattern))
-    if 'Images' in pattern:
-        img = zeros((len(fn), 512, 512, 3), dtype=uint8)
+    if 'images' in pattern:
+        img = zeros((len(fn), 448, 448, 3), dtype=uint8)
+        for k in range(len(fn)):
+            img1 = imread(fn[k])
+            img1 = imresize(img1, (448, 448,3))
+            img[k,...] = img1
     else:
-        img = zeros((len(fn), 512, 512), dtype=uint8)
+        img = zeros((len(fn), 448, 448), dtype=uint8)
+        for k in range(len(fn)):
+            pimg = imread(fn[k])
+            if len(pimg.shape) == 3:
+                img1 = pimg[:,:,0]
+                img1 = imresize(img1, (448, 448))
+                img[k, ...] = img1
+            else:
+                img1 = imresize(pimg, (448, 448))
+                img[k,...] = img1
 
-    for k in range(len(fn)):
-        img[k, ...] = imread(fn[k])
+        
 
     return img
 def conv_relu_vgg(x, reuse=None, name='conv_vgg'):
@@ -74,11 +86,11 @@ def build_model(x, y, reuse=None, training=True):
         up3 = upconv_relu(conv3, 1,ksize=12, stride=4, reuse=reuse, name='up3')
         up4 = upconv_relu(conv4, 1,ksize=24, stride=8, reuse=reuse, name='up4')
         up5 = upconv_relu(conv5, 1, ksize=3, stride=16,reuse=reuse, name='up5')
-        k1 = tf.Variable(tf.random_normal([1],mean = 1.0,stddev = 1.0))
-        k2 = tf.Variable(tf.random_normal([1],mean = 1.0,stddev = 1.0))
-        k3 = tf.Variable(tf.random_normal([1],mean = 1.0,stddev = 1.0))
-        k4 = tf.Variable(tf.random_normal([1],mean = 1.0,stddev = 1.0))
-        k5 = tf.Variable(tf.random_normal([1],mean = 1.0,stddev = 1.0))
+        k1 = tf.Variable(tf.random_normal([1],mean = 1.0,stddev = 1.0),name = 'k1')
+        k2 = tf.Variable(tf.random_normal([1],mean = 1.0,stddev = 1.0),name = 'k2')
+        k3 = tf.Variable(tf.random_normal([1],mean = 1.0,stddev = 1.0),name = 'k3')
+        k4 = tf.Variable(tf.random_normal([1],mean = 1.0,stddev = 1.0),name = 'k4')
+        k5 = tf.Variable(tf.random_normal([1],mean = 1.0,stddev = 1.0),name = 'k5')
         
         kup1 = k1*up1
         kup2 = k2*up2
@@ -90,10 +102,11 @@ def build_model(x, y, reuse=None, training=True):
         add1234 = tf.add(add123, kup4, name='add1234')
         add12345 = tf.add(add1234, kup5, name='add12345')
         out = tf.sigmoid(add12345,'out')
+        logits = tf.reshape(add12345, [-1, 448, 448])
         #loss = -tf.reduce_mean(y*tf.log(out)+(1-y)*tf.log(1-out))
         loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
-                                logits=add12345, labels=tf.reshape(tf.to_float(y), [-1, 448, 448, 1])),name = "loss")
-        return out,loss
+                                logits=logits, labels=tf.to_float(y)),name = "loss")
+        return logits,loss
         
         
         
