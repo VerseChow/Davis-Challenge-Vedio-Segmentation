@@ -101,12 +101,13 @@ def build_model(x, y, reuse=None, training=True):
         add123 = tf.add(add12, kup3, name='add123')
         add1234 = tf.add(add123, kup4, name='add1234')
         add12345 = tf.add(add1234, kup5, name='add12345')
-        out = tf.sigmoid(add12345,'out')
+        out1 = tf.sigmoid(add12345)
+        out = tf.reshape(out1,[-1,448,448],name='out')
         logits = tf.reshape(add12345, [-1, 448, 448])
         #loss = -tf.reduce_mean(y*tf.log(out)+(1-y)*tf.log(1-out))
         loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
                                 logits=logits, labels=tf.to_float(y)),name = "loss")
-        return logits,loss
+        return out,loss
         
         
         
