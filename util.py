@@ -12,21 +12,21 @@ vgg_weights = load('vgg16.npy', encoding='latin1').item()
 def load_images(pattern):
     fn = sorted(glob(pattern))
     if 'images' in pattern:
-        img = zeros((len(fn), 448, 448, 3), dtype=uint8)
+        img = zeros((len(fn), 480, 854, 3), dtype=uint8)
         for k in range(len(fn)):
             img1 = imread(fn[k])
-            img1 = imresize(img1, (448, 448,3))
+            img1 = imresize(img1, (480, 854,3))
             img[k,...] = img1
     else:
-        img = zeros((len(fn), 448, 448), dtype=uint8)
+        img = zeros((len(fn), 480, 854), dtype=uint8)
         for k in range(len(fn)):
             pimg = imread(fn[k])
             if len(pimg.shape) == 3:
                 img1 = pimg[:,:,0]
-                img1 = imresize(img1, (448, 448))
+                img1 = imresize(img1, (480, 854))
                 img[k, ...] = img1
             else:
-                img1 = imresize(pimg, (448, 448))
+                img1 = imresize(pimg, (480, 854))
                 img[k,...] = img1
 
     return img
@@ -35,19 +35,19 @@ def load_edge_image(label_pattern, image_pattern):
     list_of_label = sorted(glob(label_pattern+'/*.png'))
     list_of_image = sorted(glob(image_pattern+'/*.jpg'))
     len_label = 100#len(list_of_label)
-    label = zeros((len_label, 448, 448), dtype=uint8)
-    img = zeros((len_label, 448, 448, 3), dtype=uint8)
+    label = zeros((len_label, 480, 854), dtype=uint8)
+    img = zeros((len_label, 480, 854, 3), dtype=uint8)
     print 'loading the data....'
     for k in range(len_label):
         label1 = imread(list_of_label[k])
-        label1 = imresize(label1, (448, 448))
+        #label1 = imresize(label1, (448, 448))
         label1 = label1/255
         label[k,...] = label1
         base = os.path.basename(list_of_label[k])
         base = os.path.splitext(base)[0]
         matching = [s for s in list_of_image if base in s]
         img1 = imread(matching[0])
-        img1 = imresize(img1, (448, 448, 3))
+        #img1 = imresize(img1, (448, 448, 3))
         img[k,...] = img1
         rate = float(k)/float(len_label)*100.0
         stdout.write("\r completing... %.2f %%" % rate)
@@ -59,6 +59,7 @@ def load_edge_image(label_pattern, image_pattern):
 
 
 
+    
 
 
 def conv_relu_vgg(x, reuse=None, name='conv_vgg'):
@@ -112,30 +113,74 @@ def build_model(x, y, reuse=None, training=True):
         # 7 14
         #pool5 = tf.layers.max_pooling2d(conv5, 2, 2, name='pool5')
         #(a)for segmentation
-        #
-        up1 = upconv_relu(conv1, 1,ksize=3, stride=1, reuse=reuse, name='up1')
-        up2 = upconv_relu(conv2, 1,ksize=3, stride=2, reuse=reuse, name='up2')
-        up3 = upconv_relu(conv3, 1,ksize=3, stride=4, reuse=reuse, name='up3')
-        up4 = upconv_relu(conv4, 1,ksize=3, stride=8, reuse=reuse, name='up4')
-        up5 = upconv_relu(conv5, 1, ksize=3, stride=16,reuse=reuse, name='up5')
-        k1 = tf.Variable(tf.random_normal([1],mean = 1.0,stddev = 1.0),name = 'k1')
-        k2 = tf.Variable(tf.random_normal([1],mean = 1.0,stddev = 1.0),name = 'k2')
-        k3 = tf.Variable(tf.random_normal([1],mean = 1.0,stddev = 1.0),name = 'k3')
-        k4 = tf.Variable(tf.random_normal([1],mean = 1.0,stddev = 1.0),name = 'k4')
-        k5 = tf.Variable(tf.random_normal([1],mean = 1.0,stddev = 1.0),name = 'k5')
+        #prepare 
+        prep2 = tf.layers.conv2d(inputs = conv2, filters = 16, kernel_size = 3, strides = 1,
+                padding='same', use_bias=True, reuse=reuse,
+                name='prep2')
+        prep3 = tf.layers.conv2d(inputs = conv3, filters = 16, kernel_size = 3, strides = 1,
+                padding='same', use_bias=True, reuse=reuse,
+                name='prep3')
+        prep4 = tf.layers.conv2d(inputs = conv4, filters = 16, kernel_size = 3, strides = 1,
+                padding='same', use_bias=True, reuse=reuse,
+                name='prep4')              
+        prep5 = tf.layers.conv2d(inputs = conv5, filters = 16, kernel_size = 3, strides = 1,
+                padding='same', use_bias=True, reuse=reuse,
+                name='prep5')       
+        #upsampling
+        up2 = tf.layers.conv2d_transpose(prep2, filters=16, kernel_size = 4, strides = 2,
+                padding='same', use_bias=False, reuse=reuse,
+                name='up2')
+        start1 = (up2.shape[1]-480)/2
+        start2 = (up2.shape[2]-854)/2
+        end1 = up2.shape[1]-start1
+        end2 = up2.shape[2]-start2 
+        up2c = up2[:,start1:end1,start2:end2,0:16]#tf.image.resize_image_with_crop_or_pad(up2, 480, 854)
+        up3 = tf.layers.conv2d_transpose(prep3, filters=16, kernel_size = 8, strides = 4,
+                padding='valid', use_bias=False, reuse=reuse,
+                name='up3')
+        start1 = (up3.shape[1]-480)/2
+        start2 = (up3.shape[2]-854)/2
+        end1 = up3.shape[1]-start1
+        end2 = up3.shape[2]-start2 
+        up3c = up3[:,start1:end1,start2:end2,0:16]#tf.image.resize_image_with_crop_or_pad(up3, 480, 854)
+        up4 = tf.layers.conv2d_transpose(prep4, filters=16, kernel_size = 16, strides = 8,
+                padding='valid', use_bias=False, reuse=reuse,
+                name='up4')
+        start1 = (up4.shape[1]-480)/2
+        start2 = (up4.shape[2]-854)/2
+        end1 = up4.shape[1]-start1
+        end2 = up4.shape[2]-start2 
+        up4c = up4[:,start1:end1,start2:end2,0:16]#tf.image.resize_image_with_crop_or_pad(up4, 480, 854)
+        up5 = tf.layers.conv2d_transpose(prep5, filters=16, kernel_size = 32, strides = 16,
+                padding='valid', use_bias=False, reuse=reuse,
+                name='up5')
+        start1 = (up5.shape[1]-480)/2
+        start2 = (up5.shape[2]-854)/2
+        end1 = up5.shape[1]-start1
+        end2 = up5.shape[2]-start2 
+        up5c = up5[:,start1:end1,start2:end2,0:16]#tf.image.resize_image_with_crop_or_pad(up5, 480, 854)
         
-        kup1 = k1*up1
-        kup2 = k2*up2
-        kup3 = k3*up3
-        kup4 = k4*up4
-        kup5 = k5*up5
-        add12 = tf.add(kup1, kup2, name='add12')
-        add123 = tf.add(add12, kup3, name='add123')
-        add1234 = tf.add(add123, kup4, name='add1234')
-        add12345 = tf.add(add1234, kup5, name='add12345')
-        out1 = tf.sigmoid(add12345)
-        out = tf.reshape(out1,[-1,448,448],name='out')
-        logits = tf.reshape(add12345, [-1, 448, 448])
+        # k2 = tf.Variable(tf.random_normal([1],mean = 1.0,stddev = 1.0),name = 'k2')
+        # k3 = tf.Variable(tf.random_normal([1],mean = 1.0,stddev = 1.0),name = 'k3')
+        # k4 = tf.Variable(tf.random_normal([1],mean = 1.0,stddev = 1.0),name = 'k4')
+        # k5 = tf.Variable(tf.random_normal([1],mean = 1.0,stddev = 1.0),name = 'k5')
+        
+        
+        # kup2 = k2*up2c
+        # kup3 = k3*up3c
+        # kup4 = k4*up4c
+        # kup5 = k5*up5c
+        
+        # add23 = tf.add(kup2, kup3, name='add23')
+        # add234 = tf.add(add23, kup4, name='add234')
+        # add2345 = tf.add(add234, kup5, name='add2345')
+        concat_score = tf.concat([up2c, up3c,up4c,up5c], axis=3, name='concat_score')
+        out_prep = tf.layers.conv2d(inputs = concat_score, filters = 1, kernel_size = 1, strides = 1,
+                padding='same', use_bias=False, reuse=reuse,
+                name='out_prep')  
+        out1 = tf.sigmoid(out_prep)
+        out = tf.reshape(out1,[-1,480,854],name='out')
+        logits = tf.reshape(out_prep, [-1, 480, 854])
         #loss = -tf.reduce_mean(y*tf.log(out)+(1-y)*tf.log(1-out))
         loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
                                 logits=logits, labels=tf.to_float(y)),name = "loss")

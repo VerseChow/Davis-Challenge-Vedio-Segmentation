@@ -1,5 +1,5 @@
 from util import *
-import tensorflow as tf
+import tensorflow as tf  
 import time, os
 import argparse
 from numpy import *
@@ -21,10 +21,10 @@ def main(edge_flag = False):
 
     os.environ['CUDA_VISIBLE_DEVICES'] = config.gpu
 
-    x = tf.placeholder(tf.float32, shape=[None, 448, 448, 3], name='x')
-    y = tf.placeholder(tf.int64, shape=[None, 448, 448], name='y')
-    x_val = tf.placeholder(tf.float32, shape=[None, 448, 448, 3], name='x_val')
-    y_val = tf.placeholder(tf.int64, shape=[None, 448, 448], name='y_val') 
+    x = tf.placeholder(tf.float32, shape=[None, 480, 854, 3], name='x')
+    y = tf.placeholder(tf.int64, shape=[None, 480, 854], name='y')
+    x_val = tf.placeholder(tf.float32, shape=[None, 480, 854, 3], name='x_val')
+    y_val = tf.placeholder(tf.int64, shape=[None, 480, 854], name='y_val') 
     logits, loss = build_model(x, y)
     logits_val, loss_val = build_model(x_val, y_val, training=False, reuse=True)
     num_param = 0
@@ -40,11 +40,11 @@ def main(edge_flag = False):
     tf.summary.scalar('loss_val', loss_val)
     pred_train = tf.to_int64(logits>0.5, name = 'pred_train')
     result_train = tf.concat([y, pred_train], axis=2)
-    result_train = tf.cast(255 * tf.reshape(result_train, [-1, 448, 896, 1]), tf.uint8)
+    result_train = tf.cast(255 * tf.reshape(result_train, [-1, 480, 1708, 1]), tf.uint8)
 
     pred_val = tf.to_int64(logits_val>0.5, name = 'pred_train_val')
     result_val = tf.concat([y_val, pred_val], axis=2)
-    result_val = tf.cast(255 * tf.reshape(result_val, [-1, 448, 896, 1]), tf.uint8)
+    result_val = tf.cast(255 * tf.reshape(result_val, [-1, 480, 1708, 1]), tf.uint8)
 
     tf.summary.image('result_train', result_train, max_outputs=config.batch_size)
     tf.summary.image('result_val', result_val, max_outputs=config.batch_size)
@@ -152,7 +152,7 @@ def main(edge_flag = False):
 
                 if epoch % 5 == 0:
                     print('Saving checkpoint ...')
-                    saver.save(sess, './checkpoint/lastest_FCN.ckpt')
+                    saver.save(sess, './checkpoint/FCN.ckpt', global_step=epoch)
 def parse_args():
     """Parse input arguments."""
     parser = argparse.ArgumentParser(description='OSVOS_demo')
