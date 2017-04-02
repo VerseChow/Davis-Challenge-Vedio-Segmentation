@@ -1,9 +1,12 @@
 import tensorflow as tf
+import os
 from glob import glob
 from numpy import *
 import numpy as np
 from scipy.misc import imread, imresize,imshow
+from sys import stdout
 from imagenet_classes import class_names
+
 
 vgg_weights = load('vgg16.npy', encoding='latin1').item()
 def load_images(pattern):
@@ -26,9 +29,38 @@ def load_images(pattern):
                 img1 = imresize(pimg, (448, 448))
                 img[k,...] = img1
 
-        
-
     return img
+
+def load_edge_image(label_pattern, image_pattern):
+    list_of_label = sorted(glob(label_pattern+'/*.png'))
+    list_of_image = sorted(glob(image_pattern+'/*.jpg'))
+    len_label = len(list_of_label)
+    label = zeros((len_label, 448, 448), dtype=uint8)
+    img = zeros((len_label, 448, 448, 3), dtype=uint8)
+    print 'loading the data....'
+    for k in range(len_label):
+        label1 = imread(list_of_label[k])
+        label1 = imresize(label1, (448, 448))
+        label1 = lable1/255
+        label[k,...] = label1
+        base = os.path.basename(list_of_label[k])
+        base = os.path.splitext(base)[0]
+        matching = [s for s in list_of_image if base in s]
+        img1 = imread(matching[0])
+        img1 = imresize(img1, (448, 448, 3))
+        img[k,...] = img1
+        rate = float(k)/float(len_label)*100.0
+        stdout.write("\r completing... %.2f %%" % rate)
+        stdout.flush()
+       
+    stdout.write("\n")
+    print 'finish loading data!' 
+    return img, label
+
+
+
+
+
 def conv_relu_vgg(x, reuse=None, name='conv_vgg'):
     kernel = vgg_weights[name][0]
     bias = vgg_weights[name][1]

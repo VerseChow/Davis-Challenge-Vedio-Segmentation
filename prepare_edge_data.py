@@ -7,7 +7,7 @@ from numpy import *
 from scipy.misc import imread, imsave
 
 annotation_dir = './trainval/trainval'#sys.argv[1] # path/to/annotation (without the last '/')
-save_goal_dir = './data/edge_image'
+save_goal_dir = './Data/edge_image'
 
 print 'annotation dir is: '+annotation_dir
 print 'save edge image dir is: '+save_goal_dir
