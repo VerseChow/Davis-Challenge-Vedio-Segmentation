@@ -1,4 +1,4 @@
-from util import load_edge_image
+from util import *
 import tensorflow as tf
 import time, os
 import argparse
@@ -40,11 +40,11 @@ def main(edge_flag = False):
     tf.summary.scalar('loss_val', loss_val)
     pred_train = tf.to_int64(logits>0.5, name = 'pred_train')
     result_train = tf.concat([y, pred_train], axis=2)
-    result_train = tf.cast(255 * tf.reshape(result_train, [-1, 448, 896, 1]), tf.uint8)
+    result_train = tf.cast(255 * tf.reshape(result_train, [-1, 448, 896]), tf.uint8)
 
     pred_val = tf.to_int64(logits_val>0.5, name = 'pred_train_val')
     result_val = tf.concat([y_val, pred_val], axis=2)
-    result_val = tf.cast(255 * tf.reshape(result_val, [-1, 448, 896, 1]), tf.uint8)
+    result_val = tf.cast(255 * tf.reshape(result_val, [-1, 448, 896]), tf.uint8)
 
     tf.summary.image('result_train', result_train, max_outputs=config.batch_size)
     tf.summary.image('result_val', result_val, max_outputs=config.batch_size)
@@ -88,7 +88,8 @@ def main(edge_flag = False):
         else:
             label_pattern = './Data/edge_image'
             image_pattern = './Data/VOC2010/JPEGImages'
-            imges, labels = load_edge_image(label_pattern, image_pattern)
+            images, labels = load_edge_image(label_pattern, image_pattern)
+            images_val, labels_val = load_edge_image(label_pattern, image_pattern)
         
     else:
         print('\nLoading data from ./data/val')
@@ -141,8 +142,7 @@ def main(edge_flag = False):
                         writer.add_summary(sess.run(sum_all,
                                                     feed_dict={x: img, y: lbl,
                                                             x_val: img_val, y_val: lbl_val,
-                                                            learning_rate: lr}),
-                                            total_count)
+                                                            learning_rate: lr}), total_count)
                     total_count += 1
 
                     m, s = divmod(time.time() - t0, 60)

@@ -5,7 +5,7 @@ from numpy import *
 import numpy as np
 from scipy.misc import imread, imresize,imshow
 from sys import stdout
-from imagenet_classes import class_names
+#from imagenet_classes import class_names
 
 
 vgg_weights = load('vgg16.npy', encoding='latin1').item()
@@ -34,14 +34,14 @@ def load_images(pattern):
 def load_edge_image(label_pattern, image_pattern):
     list_of_label = sorted(glob(label_pattern+'/*.png'))
     list_of_image = sorted(glob(image_pattern+'/*.jpg'))
-    len_label = len(list_of_label)
+    len_label = 100#len(list_of_label)
     label = zeros((len_label, 448, 448), dtype=uint8)
     img = zeros((len_label, 448, 448, 3), dtype=uint8)
     print 'loading the data....'
     for k in range(len_label):
         label1 = imread(list_of_label[k])
         label1 = imresize(label1, (448, 448))
-        label1 = lable1/255
+        label1 = label1/255
         label[k,...] = label1
         base = os.path.basename(list_of_label[k])
         base = os.path.splitext(base)[0]
@@ -114,9 +114,9 @@ def build_model(x, y, reuse=None, training=True):
         #(a)for segmentation
         #
         up1 = upconv_relu(conv1, 1,ksize=3, stride=1, reuse=reuse, name='up1')
-        up2 = upconv_relu(conv2, 1,ksize=6, stride=2, reuse=reuse, name='up2')
-        up3 = upconv_relu(conv3, 1,ksize=12, stride=4, reuse=reuse, name='up3')
-        up4 = upconv_relu(conv4, 1,ksize=24, stride=8, reuse=reuse, name='up4')
+        up2 = upconv_relu(conv2, 1,ksize=3, stride=2, reuse=reuse, name='up2')
+        up3 = upconv_relu(conv3, 1,ksize=3, stride=4, reuse=reuse, name='up3')
+        up4 = upconv_relu(conv4, 1,ksize=3, stride=8, reuse=reuse, name='up4')
         up5 = upconv_relu(conv5, 1, ksize=3, stride=16,reuse=reuse, name='up5')
         k1 = tf.Variable(tf.random_normal([1],mean = 1.0,stddev = 1.0),name = 'k1')
         k2 = tf.Variable(tf.random_normal([1],mean = 1.0,stddev = 1.0),name = 'k2')
