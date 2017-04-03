@@ -25,8 +25,10 @@ for file_name in list_of_files:
     annotation = sio.loadmat(file_name)
     annotation_matrix = annotation['LabelMap']
     annotation_matrix = uint8(annotation_matrix)
+
     # print the length of the lines from the input file
-    image = Image.fromarray(annotation_matrix)
+    image = Image.fromarray(annotation_matrix,'RGB')
+    image = image.resize((448,448,3));
     image = image.filter(ImageFilter.FIND_EDGES)
     image = image.convert('1')
     base = os.path.basename(file_name)

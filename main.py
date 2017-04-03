@@ -5,6 +5,7 @@ import argparse
 from numpy import *
 from scipy.misc import imsave,imshow
 from scipy.ndimage.filters import gaussian_filter1d
+from glob import glob
 
 
 def main(edge_flag = False):
@@ -20,13 +21,15 @@ def main(edge_flag = False):
     config = tf.app.flags.FLAGS
 
     os.environ['CUDA_VISIBLE_DEVICES'] = config.gpu
+    data_dir = './DAVIS'
+    #x = tf.placeholder(tf.float32, shape=[None, 448, 448, 3], name='x')
+    #y = tf.placeholder(tf.int64, shape=[None, 448, 448], name='y')
+    #x_val = tf.placeholder(tf.float32, shape=[None, 448, 448, 3], name='x_val')
+    #y_val = tf.placeholder(tf.int64, shape=[None, 448, 448], name='y_val')
+    
 
-    x = tf.placeholder(tf.float32, shape=[None, 480, 854, 3], name='x')
-    y = tf.placeholder(tf.int64, shape=[None, 480, 854], name='y')
-    x_val = tf.placeholder(tf.float32, shape=[None, 480, 854, 3], name='x_val')
-    y_val = tf.placeholder(tf.int64, shape=[None, 480, 854], name='y_val') 
-    logits, loss = build_model(x, y)
-    logits_val, loss_val = build_model(x_val, y_val, training=False, reuse=True)
+    
+    #logits_val, loss_val = build_model(x_val, y_val, training=False, reuse=True)
     num_param = 0
     vars_trainable = tf.trainable_variables()
     for var in vars_trainable:
@@ -40,14 +43,14 @@ def main(edge_flag = False):
     tf.summary.scalar('loss_val', loss_val)
     pred_train = tf.to_int64(logits>0.5, name = 'pred_train')
     result_train = tf.concat([y, pred_train], axis=2)
-    result_train = tf.cast(255 * tf.reshape(result_train, [-1, 480, 1708, 1]), tf.uint8)
+    result_train = tf.cast(255 * tf.reshape(result_train, [-1, 448, 896, 1]), tf.uint8)
 
-    pred_val = tf.to_int64(logits_val>0.5, name = 'pred_train_val')
-    result_val = tf.concat([y_val, pred_val], axis=2)
-    result_val = tf.cast(255 * tf.reshape(result_val, [-1, 480, 1708, 1]), tf.uint8)
+    #pred_val = tf.to_int64(logits_val>0.5, name = 'pred_train_val')
+    #result_val = tf.concat([y_val, pred_val], axis=2)
+    #result_val = tf.cast(255 * tf.reshape(result_val, [-1, 448, 896, 1]), tf.uint8)
 
     tf.summary.image('result_train', result_train, max_outputs=config.batch_size)
-    tf.summary.image('result_val', result_val, max_outputs=config.batch_size)
+    #tf.summary.image('result_val', result_val, max_outputs=config.batch_size)
 
     learning_rate = tf.placeholder(tf.float32, shape=[], name='lr')
     tf.summary.scalar('learning_rate', learning_rate)
@@ -57,34 +60,19 @@ def main(edge_flag = False):
     t0 = time.time()
     if config.training:
         if not config.edge_training:
-            print('\nLoading data from ./data/train')
-            path1 = './Data/train/images'
-            path2 = './Data/train/labels'
-            path3 = './Data/val/images'
-            path4 = './Data/val/labels'
-            list1 = os.listdir(path1)
-            list2 = os.listdir(path2)
-            list3 = os.listdir(path3)
-            list4 = os.listdir(path4)
-            images = load_images(path1+'/'+list1[0]+'/*.jpg')
-            labels = load_images(path2+'/'+list2[0]+'/*.png')
-            for i in range(1,len(list1)):
-                images1 = load_images(path1+'/'+list1[i]+'/*.jpg')
-                labels1 = load_images(path2+'/'+list2[i]+'/*.png')
-                images = np.row_stack((images,images1))
-                labels = np.row_stack((labels,labels1)) 
-                
-            labels = labels/255
+            print('\nLoading data from ./DAVIS')
+            data_dir = './DAVIS'
+            fn_img = []
+            fn_seg = []
+            with open(data_dir+'/ImageSets/1080p/train.txt', 'r') as f:
+                for line in f
+                    i,s = line.split(' ')
+                    fn_img.append(data_dir+i)
+                    fn_seg.append(data_dir+s[:-1])
+
+            y, x = input_pipeline(fn_seg, fn_img, config.batch_size)
+            logits, loss = build_model(x, y)
             
-            print('\nLoading data from ./data/val')
-            images_val = load_images(path3+'/'+list3[0]+'/*.jpg')
-            labels_val = load_images(path4+'/'+list4[0]+'/*.png')
-            for i in range(1,len(list3)):
-                images_val1 = load_images(path3+'/'+list3[i]+'/*.jpg')
-                labels_val1 = load_images(path4+'/'+list4[i]+'/*.png')
-                images_val = np.row_stack((images_val,images_val1))
-                labels_val = np.row_stack((labels_val,labels_val1))
-            labels_val = labels_val/255
         else:
             label_pattern = './Data/edge_image'
             image_pattern = './Data/VOC2010/JPEGImages'
@@ -117,32 +105,29 @@ def main(edge_flag = False):
         if config.training:
             writer = tf.summary.FileWriter("./logs", sess.graph)
 
-            order = arange(images.shape[0], dtype=uint32)
+            #order = arange(images.shape[0], dtype=uint32)
             total_count = 0
             t0 = time.time()
             for epoch in range(config.num_epoch):
-                random.shuffle(order)
+                #random.shuffle(order)
                 lr = config.init_learning_rate * config.learning_rate_decay**epoch
                 # lr = max(lr, config.min_learning_rate)
                 for k in range(images.shape[0] // config.batch_size):
-                    idx = order[(k * config.batch_size):min((k + 1) * config.batch_size, 1 + images.shape[0])]
-                    if random.rand() > 0.5:
-                        img = images[idx, :, :, :]
-                        lbl = labels[idx, :, :]
-                    else:
-                        img = images[idx, :, ::-1, :]
-                        lbl = labels[idx, :, ::-1]
+                    #idx = order[(k * config.batch_size):min((k + 1) * config.batch_size, 1 + images.shape[0])]
+                    #if random.rand() > 0.5:
+                    #    img = images[idx, :, :, :]
+                    #    lbl = labels[idx, :, :]
+                    #else:
+                    #    img = images[idx, :, ::-1, :]
+                    #    lbl = labels[idx, :, ::-1]
 
-                    l_train, _ = sess.run([loss, train_step], feed_dict={x: img, y: lbl, learning_rate: lr})
+                    l_train, _ = sess.run([loss, train_step], feed_dict={learning_rate: lr})
 
                     if total_count % (images.shape[0] // config.batch_size // 20) == 0:
                         idx = random.randint(0, images_val.shape[0] - 1, config.batch_size)
                         img_val = images_val[idx, ...]
                         lbl_val = labels_val[idx, ...]
-                        writer.add_summary(sess.run(sum_all,
-                                                    feed_dict={x: img, y: lbl,
-                                                            x_val: img_val, y_val: lbl_val,
-                                                            learning_rate: lr}), total_count)
+                        writer.add_summary(sess.run(sum_all, feed_dict={learning_rate: lr}), total_count)
                     total_count += 1
 
                     m, s = divmod(time.time() - t0, 60)
@@ -152,7 +137,7 @@ def main(edge_flag = False):
 
                 if epoch % 5 == 0:
                     print('Saving checkpoint ...')
-                    saver.save(sess, './checkpoint/FCN.ckpt', global_step=epoch)
+                    saver.save(sess, './checkpoint/FCN_edge.ckpt')
 def parse_args():
     """Parse input arguments."""
     parser = argparse.ArgumentParser(description='OSVOS_demo')
@@ -162,6 +147,8 @@ def parse_args():
     args = parser.parse_args()
 
     return args
+
+
 
 def test(edge_flag = False):
     print edge_flag
