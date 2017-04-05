@@ -22,27 +22,7 @@ def main(edge_flag = False):
 
     os.environ['CUDA_VISIBLE_DEVICES'] = config.gpu
     data_dir = './DAVIS'
-    #x = tf.placeholder(tf.float32, shape=[None, 480, 854, 3], name='x')
-    #y = tf.placeholder(tf.int64, shape=[None, 480, 854], name='y')
-    #x_val = tf.placeholder(tf.float32, shape=[None, 448, 448, 3], name='x_val')
-    #y_val = tf.placeholder(tf.int64, shape=[None, 448, 448], name='y_val')
-    
-
-    
-    #logits_val, loss_val = build_model(x_val, y_val, training=False, reuse=True)
-    
-    
-    
-
-    #pred_val = tf.to_int64(logits_val>0.5, name = 'pred_train_val')
-    #result_val = tf.concat([y_val, pred_val], axis=2)
-    #result_val = tf.cast(255 * tf.reshape(result_val, [-1, 448, 896, 1]), tf.uint8)
-
-    
-    #tf.summary.image('result_val', result_val, max_outputs=config.batch_size)
-
-    
-
+ 
     learning_rate = tf.placeholder(tf.float32, shape=[], name='lr')
     t0 = time.time()
     if config.training:
@@ -69,13 +49,12 @@ def main(edge_flag = False):
             vars_trainable = tf.trainable_variables()
             for var in vars_trainable:
                 num_param += prod(var.get_shape()).value
-                #print(var.name, var.get_shape())
                 tf.summary.histogram(var.name, var)
 
             print('\nTotal nummber of parameters = %d' % num_param)
 
             train_step = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss, var_list=vars_trainable)
-            #tf.summary.scalar('loss_val', loss_val)
+            
             
         else:
             label_pattern = './Data/edge_image'
@@ -85,8 +64,7 @@ def main(edge_flag = False):
         
     else:
         print('\nLoading data from ./data/val')
-        #images_val = load_images('./data/val/images/*.png')
-        #labels_val = load_images('./data/val/labels/*.png')
+        ### edge detector later
     print('Finished loading in %.2f seconds.' % (time.time() - t0))
     
     tf.summary.scalar('learning_rate', learning_rate)
@@ -113,29 +91,18 @@ def main(edge_flag = False):
             writer = tf.summary.FileWriter("./logs", sess.graph)
             coord = tf.train.Coordinator()
             threads = tf.train.start_queue_runners(coord=coord)
-            #order = arange(images.shape[0], dtype=uint32)
             total_count = 0
             t0 = time.time()
             for epoch in range(config.num_epoch):
-                #random.shuffle(order)
+                
 
                 lr = config.init_learning_rate * config.learning_rate_decay**epoch
                 
-                #lr = max(lr, config.min_learning_rate)
+                
                 for k in range(len(fn_seg) // config.batch_size):
-                    #idx = order[(k * config.batch_size):min((k + 1) * config.batch_size, 1 + images.shape[0])]
-                    #if random.rand() > 0.5:
-                    #    img = images[idx, :, :, :]
-                    #    lbl = labels[idx, :, :]
-                    #else:
-                    #    img = images[idx, :, ::-1, :]
-                    #    lbl = labels[idx, :, ::-1]
+                    
                     l_train, _ = sess.run([loss, train_step], feed_dict={learning_rate: lr})
-                    #l_train, _ = sess.run([loss, train_step], feed_dict={learning_rate: lr})
-                    #if total_count % (img.shape[0] // config.batch_size // 20) == 0:
-                    #    idx = random.randint(0, images_val.shape[0] - 1, config.batch_size)
-                    #    img_val = images_val[idx, ...]
-                    #    lbl_val = labels_val[idx, ...]
+                    
                     writer.add_summary(sess.run(sum_all, feed_dict={learning_rate: lr}), total_count)
                     total_count += 1                
                     m, s = divmod(time.time() - t0, 60)
@@ -168,23 +135,5 @@ if __name__ == '__main__':
     
 
 
-'''label mission
-imgs = tf.placeholder(tf.float32, [None, 448, 448, 3])
-labels = tf.placeholder(tf.float32, [None, 448, 448, 3])
-img1 = imread('bear.jpg', mode='RGB')
-img1 = imresize(img1, (224, 224))
-label1 = img1
-probs = build_model(imgs,labels)
-with tf.Session() as sess:
-    init = tf.group(tf.global_variables_initializer(), tf.initialize_local_variables())
-    #init = tf.global_variables_initializer()
-    sess.run(init)
 
-
-    #img1 = imread('laska.png', mode='RGB')
-
-    prob = sess.run(probs, feed_dict={imgs: [img1],labels:[label1]})[0]
-    preds = (np.argsort(prob)[::-1])[0:5]
-    for p in preds:
-        print class_names[p], prob[p]'''
 

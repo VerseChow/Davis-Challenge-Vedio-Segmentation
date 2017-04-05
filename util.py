@@ -5,7 +5,6 @@ from numpy import *
 import numpy as np
 from scipy.misc import imread, imresize,imshow
 from sys import stdout
-#from imagenet_classes import class_names
 
 
 vgg_weights = load('vgg16.npy', encoding='latin1').item()
@@ -183,20 +182,7 @@ def build_model(x, y, reuse=None, training=True):
         end2 = up5.shape[2]-start2 
         up5c = up5[:,start1:end1,start2:end2,0:16]#tf.image.resize_image_with_crop_or_pad(up5, 480, 854)
         
-        # k2 = tf.Variable(tf.random_normal([1],mean = 1.0,stddev = 1.0),name = 'k2')
-        # k3 = tf.Variable(tf.random_normal([1],mean = 1.0,stddev = 1.0),name = 'k3')
-        # k4 = tf.Variable(tf.random_normal([1],mean = 1.0,stddev = 1.0),name = 'k4')
-        # k5 = tf.Variable(tf.random_normal([1],mean = 1.0,stddev = 1.0),name = 'k5')
-        
-        
-        # kup2 = k2*up2c
-        # kup3 = k3*up3c
-        # kup4 = k4*up4c
-        # kup5 = k5*up5c
-        
-        # add23 = tf.add(kup2, kup3, name='add23')
-        # add234 = tf.add(add23, kup4, name='add234')
-        # add2345 = tf.add(add234, kup5, name='add2345')
+    
         concat_score = tf.concat([up2c, up3c,up4c,up5c], axis=3, name='concat_score')
         out_prep = tf.layers.conv2d(inputs = concat_score, filters = 1, kernel_size = 1, strides = 1,
                 padding='same', use_bias=False, reuse=reuse,
@@ -211,39 +197,4 @@ def build_model(x, y, reuse=None, training=True):
         
         
         
-        #up1 = tf.concat([up1, conv5], axis=3, name='concat1')
-               
-        '''(b)for label
-        #7^2*512 ->  4096
-        #fc1  
-        with tf.name_scope('fc1') as scope:
-            shape = int(np.prod(pool5.get_shape()[1:]))
-            kernelf = vgg_weights['fc6'][0]
-            bias = vgg_weights['fc6'][1]
-            fc1w = tf.Variable(kernelf, name='weights')
-            fc1b = tf.Variable(bias, name='biases')
-            pool5_flat = tf.reshape(pool5, [-1, shape])
-            fc1l = tf.nn.bias_add(tf.matmul(pool5_flat, fc1w), fc1b)
-            fc1 = tf.nn.relu(fc1l)
-            
-
-        # fc2 4096->4096
-        with tf.name_scope('fc2') as scope:
-            kernelf = vgg_weights['fc7'][0]
-            bias = vgg_weights['fc7'][1]
-            fc2w = tf.Variable(kernelf, name='weights')
-            fc2b = tf.Variable(bias, name='biases')
-            fc2l = tf.nn.bias_add(tf.matmul(fc1, fc2w), fc2b)
-            fc2 = tf.nn.relu(fc2l)
-            
-
-        # fc3 4096->1000
-        with tf.name_scope('fc3') as scope:
-            kernelf = vgg_weights['fc8'][0]
-            bias = vgg_weights['fc8'][1]       
-            fc3w = tf.Variable(kernelf, name='weights')
-            fc3b = tf.Variable(bias, name='biases')
-            fc3l = tf.nn.bias_add(tf.matmul(fc2, fc3w), fc3b)
-        probs = tf.nn.softmax(fc3l)
-        return probs'''   
             
