@@ -66,22 +66,24 @@ def input_pipeline(fn_seg, fn_img, batch_size):
     with tf.variable_scope('segmentation'):
         fn_seg_queue = tf.train.string_input_producer(fn_seg, shuffle=False)
         _, value = reader.read(fn_seg_queue)
-        seg = tf.image.decode_png(value, channels=1, dtype=tf.float32)
-        seg = tf.image.resize_images(seg, [448, 448], method=tf.image.ResizeMathod.NEAREST_NEIGHBOR)
+        seg = tf.image.decode_png(value, channels=1, dtype=tf.uint8)
+        seg = tf.image.resize_images(seg, [480, 854], method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
+        seg = tf.reshape(seg, [480, 854])
+        
 
     with tf.variable_scope('image'):
         fn_img_queue = tf.train.string_input_producer(fn_img, shuffle=False)
         _, value = reader.read(fn_img_queue)
-        img = tf.image.decode_jpg(value, channels=3, dtype=tf.float32)
-        img = tf.image.resize_images(img, [448, 448], method=tf.image.ResizeMathod.BILINEAR)
-
+        img = tf.image.decode_jpeg(value, channels=3)
+        img = tf.image.resize_images(img, [480, 854], method=tf.image.ResizeMethod.BILINEAR)
+        img = tf.cast(img, dtype = tf.float32)
     with tf.variable_scope('shuffle'):
         seg, img = tf.train.shuffle_batch([seg, img], batch_size=batch_size,
                                             num_threads=4,
                                             capacity=1000 + 3 * batch_size,
                                             min_after_dequeue=1000)
 
-    return seg/255, img/255
+    return seg/255, img
 
 def conv_relu_vgg(x, reuse=None, name='conv_vgg'):
     kernel = vgg_weights[name][0]
@@ -151,32 +153,32 @@ def build_model(x, y, reuse=None, training=True):
         up2 = tf.layers.conv2d_transpose(prep2, filters=16, kernel_size = 4, strides = 2,
                 padding='same', use_bias=False, reuse=reuse,
                 name='up2')
-        start1 = (up2.shape[1]-448)/2
-        start2 = (up2.shape[2]-448)/2
+        start1 = (up2.shape[1]-480)/2
+        start2 = (up2.shape[2]-854)/2
         end1 = up2.shape[1]-start1
         end2 = up2.shape[2]-start2 
         up2c = up2[:,start1:end1,start2:end2,0:16]#tf.image.resize_image_with_crop_or_pad(up2, 480, 854)
         up3 = tf.layers.conv2d_transpose(prep3, filters=16, kernel_size = 8, strides = 4,
                 padding='valid', use_bias=False, reuse=reuse,
                 name='up3')
-        start1 = (up3.shape[1]-448)/2
-        start2 = (up3.shape[2]-448)/2
+        start1 = (up3.shape[1]-480)/2
+        start2 = (up3.shape[2]-854)/2
         end1 = up3.shape[1]-start1
         end2 = up3.shape[2]-start2 
         up3c = up3[:,start1:end1,start2:end2,0:16]#tf.image.resize_image_with_crop_or_pad(up3, 480, 854)
         up4 = tf.layers.conv2d_transpose(prep4, filters=16, kernel_size = 16, strides = 8,
                 padding='valid', use_bias=False, reuse=reuse,
                 name='up4')
-        start1 = (up4.shape[1]-448)/2
-        start2 = (up4.shape[2]-448)/2
+        start1 = (up4.shape[1]-480)/2
+        start2 = (up4.shape[2]-854)/2
         end1 = up4.shape[1]-start1
         end2 = up4.shape[2]-start2 
         up4c = up4[:,start1:end1,start2:end2,0:16]#tf.image.resize_image_with_crop_or_pad(up4, 480, 854)
         up5 = tf.layers.conv2d_transpose(prep5, filters=16, kernel_size = 32, strides = 16,
                 padding='valid', use_bias=False, reuse=reuse,
                 name='up5')
-        start1 = (up5.shape[1]-448)/2
-        start2 = (up5.shape[2]-448)/2
+        start1 = (up5.shape[1]-480)/2
+        start2 = (up5.shape[2]-854)/2
         end1 = up5.shape[1]-start1
         end2 = up5.shape[2]-start2 
         up5c = up5[:,start1:end1,start2:end2,0:16]#tf.image.resize_image_with_crop_or_pad(up5, 480, 854)
@@ -200,8 +202,8 @@ def build_model(x, y, reuse=None, training=True):
                 padding='same', use_bias=False, reuse=reuse,
                 name='out_prep')  
         out1 = tf.sigmoid(out_prep)
-        out = tf.reshape(out1,[-1,448,448],name='out')
-        logits = tf.reshape(out_prep, [-1, 448, 448])
+        out = tf.reshape(out1,[-1,480,854],name='out')
+        logits = tf.reshape(out_prep, [-1, 480, 854])
         #loss = -tf.reduce_mean(y*tf.log(out)+(1-y)*tf.log(1-out))
         loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
                                 logits=logits, labels=tf.to_float(y)),name = "loss")
