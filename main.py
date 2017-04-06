@@ -148,7 +148,7 @@ def main(edge_flag = False, train_flag = True, train_stage = 1):
                 result = sess.run(val_result)
 
                 writer.add_summary(sess.run(sum_all, feed_dict={learning_rate: lr}), k)
-                print('evaluate picture %d' % (k))
+                print('evaluate picture %d/%d' % (k, len(fn_seg)))
                 #print result, result.shape() 
                 result = reshape(result, (480, 854*2))
 
