@@ -54,15 +54,15 @@ def read_and_decode(filename_queue):
     
     
     images, annotations = tf.train.shuffle_batch( [resized_image, resized_annotation],
-                                                 batch_size=4,
-                                                 capacity=11,
+                                                 batch_size=2,
+                                                 capacity=1000+6,
                                                  num_threads=2,
-                                                 min_after_dequeue=10)
+                                                 min_after_dequeue=1000)
     
     return images, annotations
 
 filename_queue = tf.train.string_input_producer(
-    [tfrecords_filename], num_epochs=1)
+    [tfrecords_filename], num_epochs=None)
 
 # Even when reading in multiple threads, share the filename
 # queue.
@@ -91,17 +91,17 @@ with tf.Session()  as sess:
         # So we should get two image pairs in each batch
         # Let's make sure it is random
 
-        io.imshow(img[0, :, :, :])
-        io.show()
+        # io.imshow(img[0, :, :, :])
+        # io.show()
 
-        io.imshow(anno[0, :, :, 0])
-        io.show()
+        # io.imshow(anno[0, :, :, 0])
+        # io.show()
         
-        io.imshow(img[1, :, :, :])
-        io.show()
+        # io.imshow(img[1, :, :, :])
+        # io.show()
 
-        io.imshow(anno[1, :, :, 0])
-        io.show()
+        # io.imshow(anno[1, :, :, 0])
+        # io.show()
         
     
     coord.request_stop()
