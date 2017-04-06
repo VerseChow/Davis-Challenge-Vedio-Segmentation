@@ -21,7 +21,7 @@ def main(config):
         y = tf.cast(y, tf.float32)
         logits, loss = build_model(x, y)
         tf.summary.scalar('loss', loss)
-        pred_train = tf.cast(logits, tf.float32)
+        pred_train = tf.sigmoid(logits)
         result_train = tf.concat([y, pred_train], axis=2)
         result_train = tf.cast(result_train*255, tf.uint8)
         tf.summary.image('result_train_img', x, max_outputs=config.batch_size)
@@ -75,7 +75,7 @@ def main(config):
                 for k in range(2079 // config.batch_size):
                     l_train, _, a = sess.run([loss, train_step, y], feed_dict={learning_rate: lr})
                     
-                    if total_count % (2) == 0:
+                    if total_count % (20) == 0:
                         writer.add_summary(sess.run(sum_all, feed_dict={learning_rate: lr}), total_count)
                     total_count += 1                
                     m, s = divmod(time.time() - t0, 60)
