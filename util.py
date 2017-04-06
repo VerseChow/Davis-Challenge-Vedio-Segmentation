@@ -56,7 +56,7 @@ def load_edge_image(label_pattern, image_pattern):
     print 'finish loading data!' 
     return img, label
 
-def input_pipeline(fn_seg, fn_img, batch_size):
+def input_pipeline(fn_seg, fn_img, batch_size, training = True):
     reader = tf.WholeFileReader()
 
     if not len(fn_seg) == len(fn_img):
@@ -76,15 +76,19 @@ def input_pipeline(fn_seg, fn_img, batch_size):
         img = tf.image.decode_jpeg(value, channels=3)
         img = tf.image.resize_images(img, [480, 854], method=tf.image.ResizeMethod.BILINEAR)
         img = tf.cast(img, dtype = tf.float32)
-    with tf.variable_scope('shuffle'):
-        seg, img = tf.train.shuffle_batch([seg, img], batch_size=batch_size,
-                                            num_threads=4,
-                                            capacity=1000 + 3 * batch_size,
-                                            min_after_dequeue=1000)
+
+    if training:
+        with tf.variable_scope('shuffle'):
+            seg, img = tf.train.shuffle_batch([seg, img], batch_size=batch_size,
+                                                num_threads=4,
+                                                capacity=1000 + 3 * batch_size,
+                                                min_after_dequeue=1000)
+    else:
+        pass
 
     return seg/255, img
 
-def conv_relu_vgg(x, reuse=None, name='conv_vgg'):
+def conv_relu_vgg(x, reuse=None, name='conv_vgg', training = True):
     kernel = vgg_weights[name][0]
     bias = vgg_weights[name][1]
     with tf.variable_scope(name):
@@ -92,45 +96,47 @@ def conv_relu_vgg(x, reuse=None, name='conv_vgg'):
                 padding='same', use_bias=True, reuse=reuse,
                 kernel_initializer=tf.constant_initializer(kernel),
                 bias_initializer=tf.constant_initializer(bias),
-                name='conv2d')
+                name='conv2d', trainable = training)
         return tf.nn.relu(x, name='relu')
-def upconv_relu(x, num_filters, ksize=3, stride=2, reuse=None, name='upconv'):
+
+def upconv_relu(x, num_filters, ksize=3, stride=2, reuse=None, name='upconv', training = True):
     with tf.variable_scope(name):
         x = tf.layers.conv2d_transpose(x, num_filters, ksize, stride,
                 padding='same', use_bias=False, reuse=reuse,
-                name='conv2d_transpose')
+                name='conv2d_transpose', trainable = training)
         return tf.nn.relu(x, name='relu')
+
 def build_model(x, y, reuse=None, training=True):
     with tf.variable_scope('OSVOS'):
         
         x = x[..., ::-1] - [103.939, 116.779, 123.68]
 
         # 224 448
-        conv1 = conv_relu_vgg(x, reuse=reuse, name='conv1_1')
-        conv1 = conv_relu_vgg(conv1, reuse=reuse, name='conv1_2')
+        conv1 = conv_relu_vgg(x, reuse=reuse, name='conv1_1', training = training)
+        conv1 = conv_relu_vgg(conv1, reuse=reuse, name='conv1_2', training = training)
 
         # 112 224
         pool1 = tf.layers.max_pooling2d(conv1, 2, 2, name='pool1')
-        conv2 = conv_relu_vgg(pool1, reuse=reuse, name='conv2_1')
-        conv2 = conv_relu_vgg(conv2, reuse=reuse, name='conv2_2')
+        conv2 = conv_relu_vgg(pool1, reuse=reuse, name='conv2_1', training = training)
+        conv2 = conv_relu_vgg(conv2, reuse=reuse, name='conv2_2', training = training)
 
         # 56 112
         pool2 = tf.layers.max_pooling2d(conv2, 2, 2, name='pool2')
-        conv3 = conv_relu_vgg(pool2, reuse=reuse, name='conv3_1')
-        conv3 = conv_relu_vgg(conv3, reuse=reuse, name='conv3_2')
-        conv3 = conv_relu_vgg(conv3, reuse=reuse, name='conv3_3')
+        conv3 = conv_relu_vgg(pool2, reuse=reuse, name='conv3_1', training = training)
+        conv3 = conv_relu_vgg(conv3, reuse=reuse, name='conv3_2', training = training)
+        conv3 = conv_relu_vgg(conv3, reuse=reuse, name='conv3_3', training = training)
 
         # 28 56
         pool3 = tf.layers.max_pooling2d(conv3, 2, 2, name='pool3')
-        conv4 = conv_relu_vgg(pool3, reuse=reuse, name='conv4_1')
-        conv4 = conv_relu_vgg(conv4, reuse=reuse, name='conv4_2')
-        conv4 = conv_relu_vgg(conv4, reuse=reuse, name='conv4_3')
+        conv4 = conv_relu_vgg(pool3, reuse=reuse, name='conv4_1', training = training)
+        conv4 = conv_relu_vgg(conv4, reuse=reuse, name='conv4_2', training = training)
+        conv4 = conv_relu_vgg(conv4, reuse=reuse, name='conv4_3', training = training)
 
         # 14 28
         pool4 = tf.layers.max_pooling2d(conv4, 2, 2, name='pool4')
-        conv5 = conv_relu_vgg(pool4, reuse=reuse, name='conv5_1')
-        conv5 = conv_relu_vgg(conv5, reuse=reuse, name='conv5_2')
-        conv5 = conv_relu_vgg(conv5, reuse=reuse, name='conv5_3')
+        conv5 = conv_relu_vgg(pool4, reuse=reuse, name='conv5_1', training = training)
+        conv5 = conv_relu_vgg(conv5, reuse=reuse, name='conv5_2', training = training)
+        conv5 = conv_relu_vgg(conv5, reuse=reuse, name='conv5_3', training = training)
 
         # 7 14
         #pool5 = tf.layers.max_pooling2d(conv5, 2, 2, name='pool5')
@@ -138,20 +144,20 @@ def build_model(x, y, reuse=None, training=True):
         #prepare 
         prep2 = tf.layers.conv2d(inputs = conv2, filters = 16, kernel_size = 3, strides = 1,
                 padding='same', use_bias=True, reuse=reuse,
-                name='prep2')
+                name='prep2', trainable = training)
         prep3 = tf.layers.conv2d(inputs = conv3, filters = 16, kernel_size = 3, strides = 1,
                 padding='same', use_bias=True, reuse=reuse,
-                name='prep3')
+                name='prep3', trainable = training)
         prep4 = tf.layers.conv2d(inputs = conv4, filters = 16, kernel_size = 3, strides = 1,
                 padding='same', use_bias=True, reuse=reuse,
-                name='prep4')              
+                name='prep4', trainable = training)              
         prep5 = tf.layers.conv2d(inputs = conv5, filters = 16, kernel_size = 3, strides = 1,
                 padding='same', use_bias=True, reuse=reuse,
-                name='prep5')       
+                name='prep5', trainable = training)       
         #upsampling
         up2 = tf.layers.conv2d_transpose(prep2, filters=16, kernel_size = 4, strides = 2,
                 padding='same', use_bias=False, reuse=reuse,
-                name='up2')
+                name='up2', trainable = training)
         start1 = (up2.shape[1]-480)/2
         start2 = (up2.shape[2]-854)/2
         end1 = up2.shape[1]-start1
@@ -159,7 +165,7 @@ def build_model(x, y, reuse=None, training=True):
         up2c = up2[:,start1:end1,start2:end2,0:16]#tf.image.resize_image_with_crop_or_pad(up2, 480, 854)
         up3 = tf.layers.conv2d_transpose(prep3, filters=16, kernel_size = 8, strides = 4,
                 padding='valid', use_bias=False, reuse=reuse,
-                name='up3')
+                name='up3', trainable = training)
         start1 = (up3.shape[1]-480)/2
         start2 = (up3.shape[2]-854)/2
         end1 = up3.shape[1]-start1
@@ -167,7 +173,7 @@ def build_model(x, y, reuse=None, training=True):
         up3c = up3[:,start1:end1,start2:end2,0:16]#tf.image.resize_image_with_crop_or_pad(up3, 480, 854)
         up4 = tf.layers.conv2d_transpose(prep4, filters=16, kernel_size = 16, strides = 8,
                 padding='valid', use_bias=False, reuse=reuse,
-                name='up4')
+                name='up4', trainable = training)
         start1 = (up4.shape[1]-480)/2
         start2 = (up4.shape[2]-854)/2
         end1 = up4.shape[1]-start1
@@ -175,7 +181,7 @@ def build_model(x, y, reuse=None, training=True):
         up4c = up4[:,start1:end1,start2:end2,0:16]#tf.image.resize_image_with_crop_or_pad(up4, 480, 854)
         up5 = tf.layers.conv2d_transpose(prep5, filters=16, kernel_size = 32, strides = 16,
                 padding='valid', use_bias=False, reuse=reuse,
-                name='up5')
+                name='up5', trainable = training)
         start1 = (up5.shape[1]-480)/2
         start2 = (up5.shape[2]-854)/2
         end1 = up5.shape[1]-start1
@@ -186,10 +192,11 @@ def build_model(x, y, reuse=None, training=True):
         concat_score = tf.concat([up2c, up3c,up4c,up5c], axis=3, name='concat_score')
         out_prep = tf.layers.conv2d(inputs = concat_score, filters = 1, kernel_size = 1, strides = 1,
                 padding='same', use_bias=False, reuse=reuse,
-                name='out_prep')  
-        out1 = tf.sigmoid(out_prep)
-        out = tf.reshape(out1,[-1,480,854],name='out')
+                name='out_prep', trainable = training)  
         logits = tf.reshape(out_prep, [-1, 480, 854])
+        out1 = tf.round(tf.sigmoid(out_prep))
+        out = tf.reshape(out1,[-1,480,854],name='out')
+        
         #loss = -tf.reduce_mean(y*tf.log(out)+(1-y)*tf.log(1-out))
         loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
                                 logits=logits, labels=tf.to_float(y)),name = "loss")
