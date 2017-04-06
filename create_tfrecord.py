@@ -31,11 +31,14 @@ def main(args):
 
 	for img_path, annotation_path in zip(image_paths, annotation_paths):
 		
-		img = np.array(Image.open(img_path))
+		img = Image.open(img_path)
 		annotation = Image.open(annotation_path)
-		if annotation.mode is 'LA':
-			annotation = annotation.convert('L')
+		if annotation.mode is not 'P' or img.mode is not 'RGB':
+			print("ERROR: Incorrect mode!")
+			exit(1)
+		img = np.array(img)
 		annotation = np.array(annotation)
+		annotation[annotation!=0] = 1	# Convert annotation to binary
 		height = img.shape[0]
 		width = img.shape[1]
 
