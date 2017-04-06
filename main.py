@@ -1,79 +1,54 @@
-from util import *
-import tensorflow as tf  
+#!/usr/bin/env python
 import time, os
 import argparse
-from numpy import *
-from scipy.misc import imsave,imshow
-from scipy.ndimage.filters import gaussian_filter1d
-from glob import glob
+import numpy as np
+import tensorflow as tf
+from util import *
+import skimage.io as io
 
-
-def main(edge_flag = False):
-    tf.app.flags.DEFINE_integer('batch_size', 4, 'Number of images in each batch')
-    tf.app.flags.DEFINE_integer('num_epoch', 100, 'Total number of epochs to run for training')
-    tf.app.flags.DEFINE_boolean('training', True, 'If true, train the model; otherwise evaluate the existing model')
-    tf.app.flags.DEFINE_boolean('edge_training', edge_flag, 'If true, train edge dataset')
-    tf.app.flags.DEFINE_float('init_learning_rate', 1e-4, 'Initial learning rate')
-    tf.app.flags.DEFINE_float('learning_rate_decay', 0.95, 'Ratio for decaying the learning rate after each epoch')
-
-    tf.app.flags.DEFINE_string('gpu', '0', 'GPU to be used')
-
-    config = tf.app.flags.FLAGS
+def main(config):
 
     os.environ['CUDA_VISIBLE_DEVICES'] = config.gpu
-    data_dir = './DAVIS'
+    WIDTH = {'480p': 854, '1080p': 1920}
+    HEIGHT = {'480p': 480, '1080p': 1080}
  
-    learning_rate = tf.placeholder(tf.float32, shape=[], name='lr')
     t0 = time.time()
     if config.training:
-        if not config.edge_training:
-            print('\nLoading data from ./DAVIS')
-            data_dir = './DAVIS'
-            fn_img = []
-            fn_seg = []
-            with open(data_dir+'/ImageSets/1080p/train.txt', 'r') as f:
-                for line in f:
-                    i,s = line.split(' ')
-                    fn_img.append(data_dir+i)
-                    fn_seg.append(data_dir+s[:-1])
-
-            y, x = input_pipeline(fn_seg, fn_img, config.batch_size)
-            logits, loss = build_model(x, y)
-            tf.summary.scalar('loss', loss)
-            y = tf.to_int64(y, name = 'y')
-            pred_train = tf.to_int64(logits, name = 'pred_train')
-            result_train = tf.concat([y, pred_train], axis=2)
-            result_train = tf.cast(255 * tf.reshape(result_train, [-1, 480, 854*2, 1]), tf.uint8)
-            tf.summary.image('result_train', result_train, max_outputs=config.batch_size)
-            num_param = 0
-            vars_trainable = tf.trainable_variables()
-            for var in vars_trainable:
-                num_param += prod(var.get_shape()).value
-                tf.summary.histogram(var.name, var)
-
-            print('\nTotal nummber of parameters = %d' % num_param)
-
-            train_step = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss, var_list=vars_trainable)
-            
-            
-        else:
-            label_pattern = './Data/edge_image'
-            image_pattern = './Data/VOC2010/JPEGImages'
-            images, labels = load_edge_image(label_pattern, image_pattern)
-            images_val, labels_val = load_edge_image(label_pattern, image_pattern)
-        
+        tfrecords_filename = os.path.join('data','DAVIS_'+config.res+'.tfrecords')
+        filename_queue = tf.train.string_input_producer([tfrecords_filename], num_epochs=config.num_epochs)
+        x, y = input_pipeline(filename_queue, config.batch_size, WIDTH[config.res], HEIGHT[config.res])
+        x = tf.cast(x, tf.float32)
+        y = tf.cast(y, tf.float32)
+        logits, loss = build_model(x, y)
+        tf.summary.scalar('loss', loss)
+        pred_train = tf.cast(logits, tf.float32)
+        result_train = tf.concat([y, pred_train], axis=2)
+        result_train = tf.cast(result_train*255, tf.uint8)
+        tf.summary.image('result_train_img', x, max_outputs=config.batch_size)
+        tf.summary.image('result_train', result_train, max_outputs=config.batch_size)
     else:
-        print('\nLoading data from ./data/val')
+        print("NotImplementedError")
+        exit(1)
         ### edge detector later
-    print('Finished loading in %.2f seconds.' % (time.time() - t0))
-    
+    learning_rate = tf.placeholder(tf.float32, shape=[], name='lr')
     tf.summary.scalar('learning_rate', learning_rate)
-    
+
+    num_param = 0
+    vars_trainable = tf.trainable_variables()
+    for var in vars_trainable:
+        num_param += np.prod(var.get_shape()).value
+        tf.summary.histogram(var.name, var)
+    print('\nTotal nummber of parameters = %d' % num_param)    
     sum_all = tf.summary.merge_all()
 
+    print('Finished initializing in %.2f seconds.' % (time.time() - t0))
+
+    train_step = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss, var_list=vars_trainable)
+
+    init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
+
     with tf.Session() as sess:
-        init = tf.global_variables_initializer()
-        sess.run(init)
+        sess.run(init_op)
 
         saver = tf.train.Saver(max_to_keep=10)
         ckpt = tf.train.get_checkpoint_state('./checkpoint')
@@ -89,51 +64,42 @@ def main(edge_flag = False):
 
         if config.training:
             writer = tf.summary.FileWriter("./logs", sess.graph)
+
             coord = tf.train.Coordinator()
             threads = tf.train.start_queue_runners(coord=coord)
             total_count = 0
             t0 = time.time()
-            for epoch in range(config.num_epoch):
-                
-
+            for epoch in range(config.num_epochs):
                 lr = config.init_learning_rate * config.learning_rate_decay**epoch
-                
-                
-                for k in range(len(fn_seg) // config.batch_size):
+
+                for k in range(2079 // config.batch_size):
+                    l_train, _, a = sess.run([loss, train_step, y], feed_dict={learning_rate: lr})
                     
-                    l_train, _ = sess.run([loss, train_step], feed_dict={learning_rate: lr})
-                    
-                    writer.add_summary(sess.run(sum_all, feed_dict={learning_rate: lr}), total_count)
+                    if total_count % (2) == 0:
+                        writer.add_summary(sess.run(sum_all, feed_dict={learning_rate: lr}), total_count)
                     total_count += 1                
                     m, s = divmod(time.time() - t0, 60)
                     h, m = divmod(m, 60)
                     print('Epoch: [%4d/%4d], [%4d/%4d], Time: [%02d:%02d:%02d], loss: %.4f'
-                    % (epoch, config.num_epoch, k, len(fn_seg) // config.batch_size, h, m, s, l_train))
+                    % (epoch, config.num_epochs, k, 2079 // config.batch_size, h, m, s, l_train))
 
                 if epoch % 10 == 0:
                     print('Saving checkpoint ...')
-                    saver.save(sess, './checkpoint/Davis.ckpt')
-def parse_args():
-    """Parse input arguments."""
-    parser = argparse.ArgumentParser(description='OSVOS_demo')
-    parser.add_argument('--edge', dest='edge_flag', help='set edge_flag, default is False',
-                        default=False, type=bool)
+                    saver.save(sess, './checkpoint/Davis.ckpt', global_step=epoch)
+            coord.request_stop()
+            coord.join(threads)
 
-    args = parser.parse_args()
-
-    return args
-
-
-
-def test(edge_flag = False):
-    print edge_flag
 
 if __name__ == '__main__':
-    parser = parse_args()
-    main(parser.edge_flag)
-
-    
-
-
-
-
+    parser = argparse.ArgumentParser(description='DAVIS Video Object Segmentation')
+    parser.add_argument('--edge', dest='edge_flag', help='set edge_flag, default is False', default=False, type=bool)
+    parser.add_argument('--batch-size', dest='batch_size', help='number of images in each batch', default=4, type=int)
+    parser.add_argument('--num-epochs', dest='num_epochs', help='total number of epochs to run for training', default=100, type=int)
+    parser.add_argument('--training', dest='training', help='if true, train the model; otherwise evaluate the existing model', default=True, type=bool)
+    parser.add_argument('--init-lr', dest='init_learning_rate', help='initial learning rate', default=1e-4, type=float)
+    parser.add_argument('--lr-decay', dest='learning_rate_decay', help='ratio of decaying the learning rate after each epoch', default=0.95, type=float)
+    parser.add_argument('--gpu', dest='gpu', help='GPU device id to be used', default='0', type=str)
+    parser.add_argument('--dataset-path', dest='dataset_path', help='path to dataset directory', default='./DAVIS', type=str)
+    parser.add_argument('--resolution', dest='res', help='480p or 1080p', default='480p', type=str)
+    args = parser.parse_args()
+    main(args)
