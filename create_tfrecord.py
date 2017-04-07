@@ -13,7 +13,7 @@ def _int64_feature(value):
 	return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
 
 def main(args):
-	imagesets_file = os.path.join(args.dataset_path, 'ImageSets',args.year,'train.txt')
+	imagesets_file = os.path.join(args.dataset_path, 'ImageSets',args.year,args.set+'.txt')
 	image_paths = []
 	annotation_paths = []
 	with open(imagesets_file,'r') as f:
@@ -26,9 +26,9 @@ def main(args):
 			image_paths.extend(images)
 			annotation_paths.extend(annotations)
 
-	tfrecords_filename = os.path.join(args.output_path, 'DAVIS_'+args.res+'.tfrecords')
+	tfrecords_filename = os.path.join(args.output_path, 'DAVIS_'+args.res+'_'+args.set+'.tfrecords')
 	writer = tf.python_io.TFRecordWriter(tfrecords_filename)
-
+	count = 0
 	for img_path, annotation_path in zip(image_paths, annotation_paths):
 		
 		img = Image.open(img_path)
@@ -55,11 +55,13 @@ def main(args):
 			'image_raw': _bytes_feature(img_raw),
 			'mask_raw': _bytes_feature(annotation_raw)}))
 		writer.write(example.SerializeToString())
+		count += 1
 		if len(annotation_raw) != height*width:
 			print('ERROR')
 			exit(1)
 		# if height*width != 409920:
 		print("Processed ",img_path, annotation.shape, img.shape, len(annotation_raw), len(img_raw))
+	print("Processed ", count, " images in total")
 	writer.close()
 
 if __name__ == '__main__':
@@ -68,5 +70,6 @@ if __name__ == '__main__':
     parser.add_argument('--output-path', dest='output_path', help='path to output directory', default='./data', type=str)
     parser.add_argument('--resolution', dest='res', help='480p or 1080p', default='480p', type=str)
     parser.add_argument('--year', dest='year', help='2016 or 2017', default='2017', type=str)
+    parser.add_argument('--set', dest='set', help='train or val', default='train', type=str)
     args = parser.parse_args()
     main(args)

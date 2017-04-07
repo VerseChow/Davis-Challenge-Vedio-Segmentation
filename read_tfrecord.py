@@ -4,7 +4,7 @@ import skimage.io as io
 IMAGE_HEIGHT = 480
 IMAGE_WIDTH = 854
 
-tfrecords_filename = './data/DAVIS_480p.tfrecords'
+tfrecords_filename = './data/DAVIS_480p_train.tfrecords'
 
 def read_and_decode(filename_queue):
     
