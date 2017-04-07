@@ -6,17 +6,17 @@ from numpy import *
 from scipy.misc import imsave,imshow
 from scipy.ndimage.filters import gaussian_filter1d
 from glob import glob
-import matplotlib.pyplot as plt
+from PIL import Image
+import subprocess
 
 def main(edge_flag = False, train_flag = True, train_stage = 1):
     tf.app.flags.DEFINE_integer('batch_size', 4, 'Number of images in each batch')
     tf.app.flags.DEFINE_integer('num_epoch', 100, 'Total number of epochs to run for training')
     tf.app.flags.DEFINE_boolean('training', train_flag, 'If true, train the model; otherwise evaluate the existing model, default is false')
     tf.app.flags.DEFINE_boolean('edge_training', edge_flag, 'If true, train edge dataset')
-    tf.app.flags.DEFINE_integer('train_stage', train_stage, '1 train based on all frame, 2 train based on first frame, default is 1')
+    tf.app.flags.DEFINE_integer('stage', train_stage, '1 train based on all frame, 2 train based on first frame, default is 1')
     tf.app.flags.DEFINE_float('init_learning_rate', 1e-5, 'Initial learning rate')
     tf.app.flags.DEFINE_float('learning_rate_decay', 0.8, 'Ratio for decaying the learning rate after each epoch')
-
 
     tf.app.flags.DEFINE_string('gpu', '0', 'GPU to be used')
 
@@ -33,20 +33,24 @@ def main(edge_flag = False, train_flag = True, train_stage = 1):
             data_dir = './DAVIS'
             fn_img = []
             fn_seg = []
-            with open(data_dir+'/ImageSets/1080p/train.txt', 'r') as f:
-                for line in f:
-                    if train_stage is 1:
+            if config.stage is 1:
+                with open(data_dir+'/ImageSets/1080p/train.txt', 'r') as f:
+                    for line in f:
+                        
+                            i,s = line.split(' ')
+                            fn_img.append(data_dir+i)
+                            fn_seg.append(data_dir+s[:-1])
+                    
+            elif config.stage is 2:
+                with open(data_dir+'/ImageSets/1080p/val.txt', 'r') as f:
+                    for line in f:
                         i,s = line.split(' ')
-                        fn_img.append(data_dir+i)
-                        fn_seg.append(data_dir+s[:-1])
-                    elif train_stage is 2:
-                        i,s = line.split(' ')
-                        if ('00000' in i) and ('00000' in s):
+                        if ('00000.jpg' in i) and ('00000.jpg' in s):
                             fn_img.append(data_dir+i)
                             fn_seg.append(data_dir+s[:-1])
 
             y, x = input_pipeline(fn_seg, fn_img, config.batch_size)
-            logits, loss = build_model(x, y, reuse = None, training = train_flag)
+            logits, loss = build_model(x, y, reuse = None, training = config.training)
             tf.summary.scalar('loss', loss)
             y = tf.to_int64(y, name = 'y')
             pred_train = tf.to_int64(logits, name = 'pred_train')
@@ -81,8 +85,10 @@ def main(edge_flag = False, train_flag = True, train_stage = 1):
                 fn_img.append(data_dir+i)
                 fn_seg.append(data_dir+s[:-1])
 
-        y, x = input_pipeline(fn_seg, fn_img, 1,  training = train_flag)
-        logits, loss = build_model(x, y, reuse = None, training = train_flag)
+        y, x = input_pipeline(fn_seg, fn_img, 1,  training = config.training)
+        y = tf.reshape(y, [1, 480, 854])
+        x = tf.reshape(x, [1, 480, 854, 3])
+        logits, loss = build_model(x, y, reuse = None, training = config.training)
         y = tf.to_int64(y, name = 'y')
         val_result = tf.to_int64(logits, name = 'val_result')
         val_result = tf.concat([y, val_result], axis=2)
@@ -144,20 +150,19 @@ def main(edge_flag = False, train_flag = True, train_stage = 1):
             coord = tf.train.Coordinator()
             threads = tf.train.start_queue_runners(coord=coord)
             lr = config.init_learning_rate * config.learning_rate_decay    
+
             for k in range(len(fn_seg)):
                 result = sess.run(val_result)
 
                 writer.add_summary(sess.run(sum_all, feed_dict={learning_rate: lr}), k)
-                print('evaluate picture %d/%d' % (k, len(fn_seg)))
-                #print result, result.shape() 
+                print('Evaluate picture %d/%d' % (k, len(fn_seg)))
                 result = reshape(result, (480, 854*2))
-
-                plt.imshow(result,cmap='gray')
-
-                plt.show()
+                im = Image.fromarray(result)
+                im.save('1.png')
+                p = subprocess.Popen(["display", "1.png"])
                 time.sleep(1)
-                
-                plt.close()
+                p.kill()
+                    
                 
 
 
@@ -176,7 +181,7 @@ def parse_args():
 
 if __name__ == '__main__':
     parser = parse_args()
-    main(parser.edge_flag, parser.train_flag, parser.train_stage)
+    main(parser.edge_flag, train_flag = parser.train_flag, train_stage = parser.train_stage)
 
     
 

@@ -76,15 +76,14 @@ def input_pipeline(fn_seg, fn_img, batch_size, training = True):
         img = tf.image.decode_jpeg(value, channels=3)
         img = tf.image.resize_images(img, [480, 854], method=tf.image.ResizeMethod.BILINEAR)
         img = tf.cast(img, dtype = tf.float32)
-
-    if training:
+        
+    if training is True:
+        print 'shuffle'
         with tf.variable_scope('shuffle'):
             seg, img = tf.train.shuffle_batch([seg, img], batch_size=batch_size,
                                                 num_threads=4,
                                                 capacity=1000 + 3 * batch_size,
                                                 min_after_dequeue=1000)
-    else:
-        pass
 
     return seg/255, img
 
