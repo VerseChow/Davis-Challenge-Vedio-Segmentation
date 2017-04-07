@@ -10,14 +10,14 @@ from PIL import Image
 import subprocess
 
 def main(edge_flag = False, train_flag = True, train_stage = 1):
-    tf.app.flags.DEFINE_integer('batch_size', 4, 'Number of images in each batch')
-    tf.app.flags.DEFINE_integer('num_epoch', 100, 'Total number of epochs to run for training')
+    tf.app.flags.DEFINE_integer('batch_size', 1, 'Number of images in each batch')
+    tf.app.flags.DEFINE_integer('num_epoch', 10000, 'Total number of epochs to run for training')
     tf.app.flags.DEFINE_boolean('training', train_flag, 'If true, train the model; otherwise evaluate the existing model, default is false')
     tf.app.flags.DEFINE_boolean('edge_training', edge_flag, 'If true, train edge dataset')
     tf.app.flags.DEFINE_integer('stage', train_stage, '1 train based on all frame, 2 train based on first frame, default is 1')
     tf.app.flags.DEFINE_float('init_learning_rate', 1e-5, 'Initial learning rate')
     tf.app.flags.DEFINE_float('learning_rate_decay', 0.8, 'Ratio for decaying the learning rate after each epoch')
-
+    tf.app.flags.DEFINE_float('test_video_index', 10, 'Ratio for decaying the learning rate after each epoch')
     tf.app.flags.DEFINE_string('gpu', '0', 'GPU to be used')
 
     config = tf.app.flags.FLAGS
@@ -43,9 +43,22 @@ def main(edge_flag = False, train_flag = True, train_stage = 1):
                     
             elif config.stage is 2:
                 with open(data_dir+'/ImageSets/1080p/val.txt', 'r') as f:
+                    name_val_list = ['blackswan']
+                    list_k = 0
                     for line in f:
                         i,s = line.split(' ')
-                        if ('00000.jpg' in i) and ('00000.png' in s):
+                        ii = i.split('/')
+                        name_val = ii[3]
+                        #print ii[3]
+                        if name_val != name_val_list[list_k]:
+                            name_val_list.append(name_val)
+                            list_k = list_k + 1
+                    print "the video will be tested is:", name_val_list[config.test_video_index]
+                with open(data_dir+'/ImageSets/1080p/val.txt', 'r') as f:
+                    for line in f:
+                        i,s = line.split(' ')
+                        #print name_val_list[config.test_video_index]+'/00000.jpg'
+                        if ((name_val_list[config.test_video_index]+'/00000.jpg') in i) and ((name_val_list[config.test_video_index]+'/00000.png') in s):
                             fn_img.append(data_dir+i)
                             fn_seg.append(data_dir+s[:-1])
 
@@ -80,10 +93,23 @@ def main(edge_flag = False, train_flag = True, train_stage = 1):
         fn_img = []
         fn_seg = []
         with open(data_dir+'/ImageSets/1080p/val.txt', 'r') as f:
+            name_val_list = ['blackswan']
+            list_k = 0
             for line in f:
                 i,s = line.split(' ')
-                fn_img.append(data_dir+i)
-                fn_seg.append(data_dir+s[:-1])
+                ii = i.split('/')
+                name_val = ii[3]
+                #print ii[3]
+                if name_val != name_val_list[list_k]:
+                    name_val_list.append(name_val)
+                    list_k = list_k + 1
+            print "the video will be tested is:", name_val_list[config.test_video_index]        
+        with open(data_dir+'/ImageSets/1080p/val.txt', 'r') as f:
+            for line in f:
+                i,s = line.split(' ')
+                if (name_val_list[config.test_video_index] in i) and (name_val_list[config.test_video_index] in s):
+                    fn_img.append(data_dir+i)
+                    fn_seg.append(data_dir+s[:-1])
 
         y, x = input_pipeline(fn_seg, fn_img, 1,  training = config.training)
         y = tf.reshape(y, [1, 480, 854])
@@ -108,10 +134,16 @@ def main(edge_flag = False, train_flag = True, train_stage = 1):
         sess.run(init)
 
         saver = tf.train.Saver(max_to_keep=10)
-        ckpt = tf.train.get_checkpoint_state('./checkpoint')
+        if config.stage == 1:
+            ckpt = tf.train.get_checkpoint_state('./checkpoint')
+        else:
+            ckpt = tf.train.get_checkpoint_state('./pretrained_checkpoint')            
         if ckpt and ckpt.model_checkpoint_path:
             ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
-            saver.restore(sess, os.path.join('./checkpoint', ckpt_name))
+            if config.stage == 1:
+                saver.restore(sess, os.path.join('./checkpoint', ckpt_name))
+            else:
+                saver.restore(sess, os.path.join('./pretrained_checkpoint', ckpt_name))
             print('[*] Success to read {}'.format(ckpt_name))
         else:
             if config.training:
