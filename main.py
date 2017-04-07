@@ -45,7 +45,7 @@ def main(edge_flag = False, train_flag = True, train_stage = 1):
                 with open(data_dir+'/ImageSets/1080p/val.txt', 'r') as f:
                     for line in f:
                         i,s = line.split(' ')
-                        if ('00000.jpg' in i) and ('00000.jpg' in s):
+                        if ('00000.jpg' in i) and ('00000.png' in s):
                             fn_img.append(data_dir+i)
                             fn_seg.append(data_dir+s[:-1])
 
