@@ -1,5 +1,6 @@
 from util import *
-import tensorflow as tf  
+import tensorflow as tf
+#import tensorlayer as tl  
 import time, os
 import argparse
 from numpy import *
@@ -17,7 +18,7 @@ def main(edge_flag = False, train_flag = True, train_stage = 1):
     tf.app.flags.DEFINE_integer('stage', train_stage, '1 train based on all frame, 2 train based on first frame, default is 1')
     tf.app.flags.DEFINE_float('init_learning_rate', 1e-5, 'Initial learning rate')
     tf.app.flags.DEFINE_float('learning_rate_decay', 0.8, 'Ratio for decaying the learning rate after each epoch')
-    tf.app.flags.DEFINE_float('test_video_index', 10, 'Ratio for decaying the learning rate after each epoch')
+    tf.app.flags.DEFINE_float('test_video_index', 2, 'Ratio for decaying the learning rate after each epoch')
     tf.app.flags.DEFINE_string('gpu', '0', 'GPU to be used')
 
     config = tf.app.flags.FLAGS
@@ -42,6 +43,7 @@ def main(edge_flag = False, train_flag = True, train_stage = 1):
                             fn_seg.append(data_dir+s[:-1])
                     
             elif config.stage is 2:
+                config.learning_rate_decay = 1
                 with open(data_dir+'/ImageSets/1080p/val.txt', 'r') as f:
                     name_val_list = ['blackswan']
                     list_k = 0
@@ -128,6 +130,11 @@ def main(edge_flag = False, train_flag = True, train_stage = 1):
     tf.summary.scalar('learning_rate', learning_rate)
     
     sum_all = tf.summary.merge_all()
+    '''print 'Start print name'
+    for v in tf.trainable_variables():
+        #if 'OSVOS/conv1_1' in v.name:
+        print v.name
+        print 1'''
 
     with tf.Session() as sess:
         init = tf.global_variables_initializer()
@@ -142,15 +149,32 @@ def main(edge_flag = False, train_flag = True, train_stage = 1):
             ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
             if config.stage == 1:
                 saver.restore(sess, os.path.join('./checkpoint', ckpt_name))
+                print('[*] Success to read {}'.format(ckpt_name))
             else:
-                saver.restore(sess, os.path.join('./pretrained_checkpoint', ckpt_name))
-            print('[*] Success to read {}'.format(ckpt_name))
+                print('do not need load, should have osvos.npy')
+                #saver.restore(sess, os.path.join('./pretrained_checkpoint', ckpt_name))
         else:
             if config.training:
                 print('[*] Failed to find a checkpoint. Start training from scratch ...')
             else:
                 raise ValueError('[*] Failed to find a checkpoint.')
-
+        #try to save weights as npy
+        #con1_ww = sess.run('OSVOS/conv1_1/conv2d/kernel:0')
+        #print "hao",con1_ww.dtype 
+        '''osvos_data = {}
+        for i in range(len(vgg_changed_names)):
+            con1_ww = sess.run(vgg_changed_names[i])
+            osvos_data[vgg_changed_names[i]] = con1_ww 
+        np.save('vgg_changed.npy',osvos_data)
+        data2 = np.load('vgg_changed.npy')
+        print data2[()][vgg_changed_names[2]]'''
+        '''osvos_data = {}
+        for i in range(len(osvos_weight_names)):
+            con1_ww = sess.run(osvos_weight_names[i])
+            osvos_data[osvos_weight_names[i]] = con1_ww 
+        np.save('osvos.npy',osvos_data)
+        data2 = np.load('osvos.npy')
+        print data2[()][osvos_weight_names[2]]'''
         if config.training:
             writer = tf.summary.FileWriter("./logs", sess.graph)
             coord = tf.train.Coordinator()
@@ -177,6 +201,8 @@ def main(edge_flag = False, train_flag = True, train_stage = 1):
                 if epoch % 10 == 0:
                     print('Saving checkpoint ...')
                     saver.save(sess, './checkpoint/Davis.ckpt')
+                    #tl.files.save_npz(vars_trainable,)
+
         else:
             writer = tf.summary.FileWriter("./logs", sess.graph)
             coord = tf.train.Coordinator()

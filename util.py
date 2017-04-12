@@ -5,9 +5,41 @@ from numpy import *
 import numpy as np
 from scipy.misc import imread, imresize,imshow
 from sys import stdout
+vgg_changed_names = ['OSVOS/conv1_1/conv2d/kernel:0',
+'OSVOS/conv1_1/conv2d/bias:0',
+'OSVOS/conv1_2/conv2d/kernel:0',
+'OSVOS/conv1_2/conv2d/bias:0',
+'OSVOS/conv2_1/conv2d/kernel:0',
+'OSVOS/conv2_1/conv2d/bias:0',
+'OSVOS/conv2_2/conv2d/kernel:0',
+'OSVOS/conv2_2/conv2d/bias:0',
+'OSVOS/conv3_1/conv2d/kernel:0',
+'OSVOS/conv3_1/conv2d/bias:0',
+'OSVOS/conv3_2/conv2d/kernel:0',
+'OSVOS/conv3_2/conv2d/bias:0',
+'OSVOS/conv3_3/conv2d/kernel:0',
+'OSVOS/conv3_3/conv2d/bias:0',
+'OSVOS/conv4_1/conv2d/kernel:0',
+'OSVOS/conv4_1/conv2d/bias:0',
+'OSVOS/conv4_2/conv2d/kernel:0',
+'OSVOS/conv4_2/conv2d/bias:0',
+'OSVOS/conv4_3/conv2d/kernel:0',
+'OSVOS/conv4_3/conv2d/bias:0',
+'OSVOS/conv5_1/conv2d/kernel:0',
+'OSVOS/conv5_1/conv2d/bias:0',
+'OSVOS/conv5_2/conv2d/kernel:0',
+'OSVOS/conv5_2/conv2d/bias:0',
+'OSVOS/conv5_3/conv2d/kernel:0',
+'OSVOS/conv5_3/conv2d/bias:0']
+osvos_weight_names = ["OSVOS/prep2/kernel:0","OSVOS/prep2/bias:0","OSVOS/prep3/kernel:0","OSVOS/prep3/bias:0",
+"OSVOS/prep4/kernel:0","OSVOS/prep4/bias:0","OSVOS/prep5/kernel:0","OSVOS/prep5/bias:0","OSVOS/up2/kernel:0",
+"OSVOS/up3/kernel:0","OSVOS/up4/kernel:0","OSVOS/up5/kernel:0","OSVOS/out_prep/kernel:0"]
+
 
 
 vgg_weights = load('vgg16.npy', encoding='latin1').item()
+osvos_weights = load('osvos.npy')
+vgg_changed_weights = load('vgg_changed.npy')
 def load_images(pattern):
     fn = sorted(glob(pattern))
     if 'images' in pattern:
@@ -87,9 +119,19 @@ def input_pipeline(fn_seg, fn_img, batch_size, training = True):
 
     return seg/255, img
 
-def conv_relu_vgg(x, reuse=None, name='conv_vgg', training = True):
+def conv_relu_vgg(x, reuse=None, name='conv_vgg', training = True,oindex = 0):
     kernel = vgg_weights[name][0]
     bias = vgg_weights[name][1]
+    with tf.variable_scope(name):
+        x = tf.layers.conv2d(x, kernel.shape[-1], kernel.shape[0],
+                padding='same', use_bias=True, reuse=reuse,
+                kernel_initializer=tf.constant_initializer(kernel),
+                bias_initializer=tf.constant_initializer(bias),
+                name='conv2d', trainable = training)
+        return tf.nn.relu(x, name='relu')
+def oconv_relu_vgg(x, reuse=None, name='conv_vgg', training = True,oindex = 0):
+    kernel = vgg_changed_weights[()][vgg_changed_names[oindex]]
+    bias = vgg_changed_weights[()][vgg_changed_names[oindex+1]]
     with tf.variable_scope(name):
         x = tf.layers.conv2d(x, kernel.shape[-1], kernel.shape[0],
                 padding='same', use_bias=True, reuse=reuse,
@@ -111,75 +153,91 @@ def build_model(x, y, reuse=None, training=True):
         x = x[..., ::-1] - [103.939, 116.779, 123.68]
 
         # 224 448
-        conv1 = conv_relu_vgg(x, reuse=reuse, name='conv1_1', training = training)
-        conv1 = conv_relu_vgg(conv1, reuse=reuse, name='conv1_2', training = training)
+        conv1 = oconv_relu_vgg(x, reuse=reuse, name='conv1_1', training = training,oindex = 0)
+        conv1 = oconv_relu_vgg(conv1, reuse=reuse, name='conv1_2', training = training,oindex = 2)
 
         # 112 224
         pool1 = tf.layers.max_pooling2d(conv1, 2, 2, name='pool1')
-        conv2 = conv_relu_vgg(pool1, reuse=reuse, name='conv2_1', training = training)
-        conv2 = conv_relu_vgg(conv2, reuse=reuse, name='conv2_2', training = training)
+        conv2 = oconv_relu_vgg(pool1, reuse=reuse, name='conv2_1', training = training,oindex = 4)
+        conv2 = oconv_relu_vgg(conv2, reuse=reuse, name='conv2_2', training = training,oindex = 6)
 
         # 56 112
         pool2 = tf.layers.max_pooling2d(conv2, 2, 2, name='pool2')
-        conv3 = conv_relu_vgg(pool2, reuse=reuse, name='conv3_1', training = training)
-        conv3 = conv_relu_vgg(conv3, reuse=reuse, name='conv3_2', training = training)
-        conv3 = conv_relu_vgg(conv3, reuse=reuse, name='conv3_3', training = training)
+        conv3 = oconv_relu_vgg(pool2, reuse=reuse, name='conv3_1', training = training,oindex = 8)
+        conv3 = oconv_relu_vgg(conv3, reuse=reuse, name='conv3_2', training = training,oindex = 10)
+        conv3 = oconv_relu_vgg(conv3, reuse=reuse, name='conv3_3', training = training,oindex = 12)
 
         # 28 56
         pool3 = tf.layers.max_pooling2d(conv3, 2, 2, name='pool3')
-        conv4 = conv_relu_vgg(pool3, reuse=reuse, name='conv4_1', training = training)
-        conv4 = conv_relu_vgg(conv4, reuse=reuse, name='conv4_2', training = training)
-        conv4 = conv_relu_vgg(conv4, reuse=reuse, name='conv4_3', training = training)
+        conv4 = oconv_relu_vgg(pool3, reuse=reuse, name='conv4_1', training = training,oindex = 14)
+        conv4 = oconv_relu_vgg(conv4, reuse=reuse, name='conv4_2', training = training,oindex = 16)
+        conv4 = oconv_relu_vgg(conv4, reuse=reuse, name='conv4_3', training = training,oindex = 18)
 
         # 14 28
         pool4 = tf.layers.max_pooling2d(conv4, 2, 2, name='pool4')
-        conv5 = conv_relu_vgg(pool4, reuse=reuse, name='conv5_1', training = training)
-        conv5 = conv_relu_vgg(conv5, reuse=reuse, name='conv5_2', training = training)
-        conv5 = conv_relu_vgg(conv5, reuse=reuse, name='conv5_3', training = training)
+        conv5 = oconv_relu_vgg(pool4, reuse=reuse, name='conv5_1', training = training,oindex = 20)
+        conv5 = oconv_relu_vgg(conv5, reuse=reuse, name='conv5_2', training = training,oindex = 22)
+        conv5 = oconv_relu_vgg(conv5, reuse=reuse, name='conv5_3', training = training,oindex = 24)
 
         # 7 14
         #pool5 = tf.layers.max_pooling2d(conv5, 2, 2, name='pool5')
         #(a)for segmentation
-        #prepare 
+        #prepare
+        kernel = osvos_weights[()][osvos_weight_names[0]]
+        bias = osvos_weights[()][osvos_weight_names[1]]
         prep2 = tf.layers.conv2d(inputs = conv2, filters = 16, kernel_size = 3, strides = 1,
-                padding='same', use_bias=True, reuse=reuse,
+                padding='same', use_bias=True, reuse=reuse, kernel_initializer=tf.constant_initializer(kernel),
+                bias_initializer=tf.constant_initializer(bias),
                 name='prep2', trainable = training)
+        kernel = osvos_weights[()][osvos_weight_names[2]]
+        bias = osvos_weights[()][osvos_weight_names[3]]               
         prep3 = tf.layers.conv2d(inputs = conv3, filters = 16, kernel_size = 3, strides = 1,
-                padding='same', use_bias=True, reuse=reuse,
+                padding='same', use_bias=True, reuse=reuse,kernel_initializer=tf.constant_initializer(kernel),
+                bias_initializer=tf.constant_initializer(bias),
                 name='prep3', trainable = training)
+        kernel = osvos_weights[()][osvos_weight_names[4]]
+        bias = osvos_weights[()][osvos_weight_names[5]]         
         prep4 = tf.layers.conv2d(inputs = conv4, filters = 16, kernel_size = 3, strides = 1,
-                padding='same', use_bias=True, reuse=reuse,
-                name='prep4', trainable = training)              
+                padding='same', use_bias=True, reuse=reuse,kernel_initializer=tf.constant_initializer(kernel),
+                bias_initializer=tf.constant_initializer(bias),
+                name='prep4', trainable = training)
+        kernel = osvos_weights[()][osvos_weight_names[6]]
+        bias = osvos_weights[()][osvos_weight_names[7]]               
         prep5 = tf.layers.conv2d(inputs = conv5, filters = 16, kernel_size = 3, strides = 1,
-                padding='same', use_bias=True, reuse=reuse,
+                padding='same', use_bias=True, reuse=reuse,kernel_initializer=tf.constant_initializer(kernel),
+                bias_initializer=tf.constant_initializer(bias),
                 name='prep5', trainable = training)       
         #upsampling
+        kernel = osvos_weights[()][osvos_weight_names[8]]
         up2 = tf.layers.conv2d_transpose(prep2, filters=16, kernel_size = 4, strides = 2,
-                padding='same', use_bias=False, reuse=reuse,
+                padding='same', use_bias=False, reuse=reuse,kernel_initializer=tf.constant_initializer(kernel),
                 name='up2', trainable = training)
         start1 = (up2.shape[1]-480)/2
         start2 = (up2.shape[2]-854)/2
         end1 = up2.shape[1]-start1
         end2 = up2.shape[2]-start2 
         up2c = up2[:,start1:end1,start2:end2,0:16]#tf.image.resize_image_with_crop_or_pad(up2, 480, 854)
+        kernel = osvos_weights[()][osvos_weight_names[9]]        
         up3 = tf.layers.conv2d_transpose(prep3, filters=16, kernel_size = 8, strides = 4,
-                padding='valid', use_bias=False, reuse=reuse,
+                padding='valid', use_bias=False, reuse=reuse,kernel_initializer=tf.constant_initializer(kernel),
                 name='up3', trainable = training)
         start1 = (up3.shape[1]-480)/2
         start2 = (up3.shape[2]-854)/2
         end1 = up3.shape[1]-start1
         end2 = up3.shape[2]-start2 
         up3c = up3[:,start1:end1,start2:end2,0:16]#tf.image.resize_image_with_crop_or_pad(up3, 480, 854)
+        kernel = osvos_weights[()][osvos_weight_names[10]]       
         up4 = tf.layers.conv2d_transpose(prep4, filters=16, kernel_size = 16, strides = 8,
-                padding='valid', use_bias=False, reuse=reuse,
+                padding='valid', use_bias=False, reuse=reuse,kernel_initializer=tf.constant_initializer(kernel),
                 name='up4', trainable = training)
         start1 = (up4.shape[1]-480)/2
         start2 = (up4.shape[2]-854)/2
         end1 = up4.shape[1]-start1
         end2 = up4.shape[2]-start2 
         up4c = up4[:,start1:end1,start2:end2,0:16]#tf.image.resize_image_with_crop_or_pad(up4, 480, 854)
+        kernel = osvos_weights[()][osvos_weight_names[11]]
         up5 = tf.layers.conv2d_transpose(prep5, filters=16, kernel_size = 32, strides = 16,
-                padding='valid', use_bias=False, reuse=reuse,
+                padding='valid', use_bias=False, reuse=reuse,kernel_initializer=tf.constant_initializer(kernel),
                 name='up5', trainable = training)
         start1 = (up5.shape[1]-480)/2
         start2 = (up5.shape[2]-854)/2
@@ -189,9 +247,13 @@ def build_model(x, y, reuse=None, training=True):
         
     
         concat_score = tf.concat([up2c, up3c,up4c,up5c], axis=3, name='concat_score')
+        kernel = osvos_weights[()][osvos_weight_names[12]]        
         out_prep = tf.layers.conv2d(inputs = concat_score, filters = 1, kernel_size = 1, strides = 1,
+                padding='same', use_bias=False, reuse=reuse,kernel_initializer=tf.constant_initializer(kernel),
+                name='out_prep', trainable = training)
+        '''out_prep1 = tf.layers.conv2d(inputs = concat_score, filters = 1, kernel_size = 1, strides = 1,
                 padding='same', use_bias=False, reuse=reuse,
-                name='out_prep', trainable = training)  
+                name='out_prep1', trainable = training)''' 
         logits = tf.reshape(out_prep, [-1, 480, 854])
         out1 = tf.round(tf.sigmoid(out_prep))
         out = tf.reshape(out1,[-1,480,854],name='out')
